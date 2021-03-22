@@ -54,9 +54,9 @@ namespace hypha
         name registerBallot(const name &proposer,
                             const string &title, const string &description, const string &content);
 
-    private:
         string getTitle(ContentWrapper cw) const;
         string getDescription(ContentWrapper cw) const;
+    private:
         bool oldDidPass(const eosio::name &ballotId);
 
     };
