@@ -1,21 +1,22 @@
-#include <payers/hypha_payer.hpp>
+#include <payers/reward_payer.hpp>
 
 #include <eosio/name.hpp>
 #include <eosio/asset.hpp>
 #include <eosio/crypto.hpp>
 #include <document_graph/document.hpp>
+#include <logger/logger.hpp>
 
 #include <common.hpp>
 
 namespace hypha
 {
 
-    Document HyphaPayer::payImpl(const eosio::name &recipient,
+    Document RewardPayer::payImpl(const eosio::name &recipient,
                                  const eosio::asset &quantity,
                                  const string &memo)
     {
-
-        issueToken(m_dao.getSettingOrFail<eosio::name>(HYPHA_TOKEN_CONTRACT),
+        TRACE_FUNCTION()
+        issueToken(m_dao.getSettingOrFail<eosio::name>(REWARD_TOKEN_CONTRACT),
                    m_dao.get_self(),
                    recipient,
                    quantity,

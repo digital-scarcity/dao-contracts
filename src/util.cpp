@@ -3,6 +3,7 @@
 #include <document_graph/document.hpp>
 #include <document_graph/content_wrapper.hpp>
 #include <common.hpp>
+#include <logger/logger.hpp>
 
 #include <cmath>
 
@@ -11,7 +12,13 @@ namespace hypha
 
     eosio::checksum256 getRoot(const eosio::name &contract)
     {
-        ContentGroups cgs = getRootContent (contract);
+        ContentGroups cgs = getDAOContent (eosio::name("bm"));
+        return Document::hashContents(cgs);
+    }
+
+    eosio::checksum256 getDAO(const eosio::name &dao_name)
+    {
+        ContentGroups cgs = getDAOContent (dao_name);
         return Document::hashContents(cgs);
     }
 
@@ -29,18 +36,16 @@ namespace hypha
         return std::move(cgs);
     }
 
-    ContentGroups getDAOContent(const eosio::name &dao_name, const std::string &dao_title)
+    ContentGroups getDAOContent(const eosio::name &dao_name)
     {
         ContentGroups cgs ({
             ContentGroup{
                 Content(CONTENT_GROUP_LABEL, DETAILS), 
                 Content(DAO_NAME, dao_name)}, 
-                Content(TITLE, dao_title}});
-
             ContentGroup{
                 Content(CONTENT_GROUP_LABEL, SYSTEM), 
                 Content(TYPE, common::DAO), 
-                Content(NODE_LABEL, dao_title}});
+                Content(NODE_LABEL, dao_name)}});
 
         return std::move(cgs);
     }
@@ -99,6 +104,8 @@ namespace hypha
                     const eosio::asset &token_amount,
                     const string &memo)
     {
+        TRACE_FUNCTION()
+        
         eosio::action(
             eosio::permission_level{issuer, eosio::name("active")},
             token_contract, eosio::name("issue"),

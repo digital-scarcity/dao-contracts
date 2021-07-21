@@ -6,6 +6,7 @@
 #include <proposals/proposal_factory.hpp>
 #include <payers/payer_factory.hpp>
 #include <payers/payer.hpp>
+#include <logger/logger.hpp>
 
 #include <dao.hpp>
 #include <common.hpp>
@@ -17,29 +18,40 @@
 
 namespace hypha
 {
+   void dao::fix (const checksum256 &hash)
+   {
+      eosio::check(!isPaused(), "Contract is paused for maintenance. Please try again later.");
+      Assignment assignment(this, hash);
+      Edge roleToAssignmentEdge = Edge::getTo(get_self(), hash, common::ASSIGNMENT);
+      Edge::getOrNew(get_self(), get_self(), hash, roleToAssignmentEdge.getFromNode(), common::ROLE_NAME);
+   }
+
    void dao::propose(const name &proposer,
                      const name &proposal_type,
                      ContentGroups &content_groups)
    {
-      eosio::check(!isPaused(), "Contract is paused for maintenance. Please try again later.");
+      TRACE_FUNCTION()
+      EOS_CHECK(!isPaused(), "Contract is paused for maintenance. Please try again later.");
 
       std::unique_ptr<Proposal> proposal = std::unique_ptr<Proposal>(ProposalFactory::Factory(*this, proposal_type));
       proposal->propose(proposer, content_groups);
    }
 
-   void dao::vote(const name &voter, const checksum256 &proposal_hash, string &vote)
+   void dao::vote(const name &voter, const checksum256 &proposal_hash, string &vote, string notes)
    {
-      eosio::check(!isPaused(), "Contract is paused for maintenance. Please try again later.");
+      TRACE_FUNCTION()
+      EOS_CHECK(!isPaused(), "Contract is paused for maintenance. Please try again later.");
       Document docprop(get_self(), proposal_hash);
       name proposal_type = docprop.getContentWrapper().getOrFail(SYSTEM, TYPE)->getAs<eosio::name>();
 
       Proposal *proposal = ProposalFactory::Factory(*this, proposal_type);
-      proposal->vote(voter, vote, docprop);
+      proposal->vote(voter, vote, docprop, notes);
    }
 
    void dao::closedocprop(const checksum256 &proposal_hash)
    {
-      eosio::check(!isPaused(), "Contract is paused for maintenance. Please try again later.");
+      TRACE_FUNCTION()
+      EOS_CHECK(!isPaused(), "Contract is paused for maintenance. Please try again later.");
 
       Document docprop(get_self(), proposal_hash);
       name proposal_type = docprop.getContentWrapper().getOrFail(SYSTEM, TYPE)->getAs<eosio::name>();
@@ -50,14 +62,15 @@ namespace hypha
 
    void dao::proposeextend(const checksum256 &assignment_hash, const int64_t additional_periods)
    {
-      eosio::check(!isPaused(), "Contract is paused for maintenance. Please try again later.");
+      TRACE_FUNCTION()
+      EOS_CHECK(!isPaused(), "Contract is paused for maintenance. Please try again later.");
 
       Assignment assignment(this, assignment_hash);
 
       // only the assignee can submit an extension proposal
       eosio::name assignee = assignment.getAssignee().getAccount();
       eosio::require_auth(assignee);
-      eosio::check(Member::isMember(get_self(), assignee), "assignee must be a current member to request an extension: " + assignee.to_string());
+      EOS_CHECK(Member::isMember(get_self(), assignee), "assignee must be a current member to request an extension: " + assignee.to_string());
 
       eosio::print("\nproposer is: " + assignee.to_string() + "\n");
       // construct ContentGroups to call propose
@@ -74,14 +87,15 @@ namespace hypha
    }
 
    void dao::withdraw(name owner, eosio::checksum256 hash) 
-   {
-     eosio::check(!isPaused(), "Contract is paused for maintenance. Please try again later.");
+   {  
+     TRACE_FUNCTION()
+     EOS_CHECK(!isPaused(), "Contract is paused for maintenance. Please try again later.");
      
      Assignment assignment(this, hash);
 
      eosio::name assignee = assignment.getAssignee().getAccount();
 
-     eosio::check(
+     EOS_CHECK(
        assignee == owner, 
        to_str("Only the member [", assignee.to_string() ,"] can withdraw the assignment [", hash, "]")
      );
@@ -99,7 +113,7 @@ namespace hypha
 
      periodsToCurrent = std::max(periodsToCurrent, int64_t(0)) + 1;
 
-     eosio::check(
+     EOS_CHECK(
        originalPeriods >= periodsToCurrent,
        to_str("Withdrawal of expired assignment: ", hash, " is not allowed")
      );
@@ -129,12 +143,13 @@ namespace hypha
 
    void dao::suspend(name proposer, eosio::checksum256 hash, string reason)
    {
-     eosio::check(
+     TRACE_FUNCTION()
+     EOS_CHECK(
        !isPaused(), 
        "Contract is paused for maintenance. Please try again later."
      );
 
-     eosio::check(
+     EOS_CHECK(
        Member::isMember(get_self(), proposer), 
        to_str("Only members are allowed to propose suspensions")
      );
@@ -154,7 +169,9 @@ namespace hypha
 
    void dao::claimnextper(const eosio::checksum256 &assignment_hash)
    {
-      eosio::check(
+      TRACE_FUNCTION()
+
+      EOS_CHECK(
         !isPaused(), 
         "Contract is paused for maintenance. Please try again later."
       );
@@ -204,13 +221,13 @@ namespace hypha
       eosio::name assignee = assignment.getAssignee().getAccount();
 
       // assignee must still be a DHO member
-      eosio::check(Member::isMember(get_self(), assignee), "assignee must be a current member to claim pay: " + assignee.to_string());
+      EOS_CHECK(Member::isMember(get_self(), assignee), "assignee must be a current member to claim pay: " + assignee.to_string());
 
       std::optional<Period> periodToClaim = assignment.getNextClaimablePeriod();
-      eosio::check(periodToClaim != std::nullopt, "All available periods for this assignment have been claimed: " + readableHash(assignment_hash));
+      EOS_CHECK(periodToClaim != std::nullopt, "All available periods for this assignment have been claimed: " + readableHash(assignment_hash));
 
       // require_auth(assignee);
-      eosio::check(has_auth(assignee) || has_auth(get_self()), "only assignee or " + get_self().to_string() + " can claim pay");
+      EOS_CHECK(has_auth(assignee) || has_auth(get_self()), "only assignee or " + get_self().to_string() + " can claim pay");
 
       // Valid claim identified - start process
       // process this claim
@@ -221,7 +238,7 @@ namespace hypha
       // Pro-rate the payment if the assignment was created during the period being claimed
       //float first_phase_ratio_calc = 1.f; // pro-rate based on elapsed % of the first phase
 
-      //eosio::check(first_phase_ratio_calc <= 1, "fatal error: first_phase_ratio_calc is greater than 1: " + std::to_string(first_phase_ratio_calc));
+      //EOS_CHECK(first_phase_ratio_calc <= 1, "fatal error: first_phase_ratio_calc is greater than 1: " + std::to_string(first_phase_ratio_calc));
 
       asset deferredSeeds;
       asset husd;
@@ -318,20 +335,27 @@ namespace hypha
          }
       }
 
-      // eosio::check(deferredSeeds.is_valid(), "fatal error: SEEDS has to be a valid asset");
-      eosio::check(husd.is_valid(), "fatal error: HUSD has to be a valid asset");
-      eosio::check(hvoice.is_valid(), "fatal error: HVOICE has to be a valid asset");
-      eosio::check(hypha.is_valid(), "fatal error: HYPHA has to be a valid asset");
+      // EOS_CHECK(deferredSeeds.is_valid(), "fatal error: SEEDS has to be a valid asset");
+      EOS_CHECK(husd.is_valid(), "fatal error: HUSD has to be a valid asset");
+      EOS_CHECK(hvoice.is_valid(), "fatal error: HVOICE has to be a valid asset");
+      EOS_CHECK(hypha.is_valid(), "fatal error: HYPHA has to be a valid asset");
 
       string assignmentNodeLabel = "";
-      if (auto [idx, assignmentLabel] = assignment.getContentWrapper().get(DETAILS, NODE_LABEL); assignmentLabel)
+      if (auto [idx, assignmentLabel] = assignment.getContentWrapper().get(SYSTEM, NODE_LABEL); assignmentLabel)
       {
-         eosio::check(std::holds_alternative<std::string>(assignmentLabel->value), "fatal error: assignment content item type is expected to be a string: " + assignmentLabel->label);
+         EOS_CHECK(std::holds_alternative<std::string>(assignmentLabel->value), "fatal error: assignment content item type is expected to be a string: " + assignmentLabel->label);
          assignmentNodeLabel = std::get<std::string>(assignmentLabel->value);
       }
 
-      string memo = "[assignment_label:" + assignmentNodeLabel + ",period_label:" + periodToClaim.value().getNodeLabel()
-               + ",assignment_hash:" + readableHash(assignment.getHash()) + ",period_hash:" + readableHash(periodToClaim.value().getHash()) + "]";
+      //If node_label is not present for any reason fallback to the assignment hash
+      if (assignmentNodeLabel.empty()) {
+        assignmentNodeLabel = to_str(assignment.getHash());
+      }
+
+      string memo = assignmentNodeLabel + ", period: " + periodToClaim.value().getNodeLabel();      
+
+      // string memo = "[assignment_label:" + assignmentNodeLabel + ",period_label:" + periodToClaim.value().getNodeLabel()
+      //          + ",assignment_hash:" + readableHash(assignment.getHash()) + ",period_hash:" + readableHash(periodToClaim.value().getHash()) + "]";
       
       // creating a single struct improves performance for table queries here
       AssetBatch ab{};
@@ -348,10 +372,11 @@ namespace hypha
 
    asset dao::getProRatedAsset(ContentWrapper *assignment, const symbol &symbol, const string &key, const float &proration)
    {
+      TRACE_FUNCTION()
       asset assetToPay = asset{0, symbol};
       if (auto [idx, assetContent] = assignment->get(DETAILS, key); assetContent)
       {
-         eosio::check(std::holds_alternative<eosio::asset>(assetContent->value), "fatal error: expected token type must be an asset value type: " + assetContent->label);
+         EOS_CHECK(std::holds_alternative<eosio::asset>(assetContent->value), "fatal error: expected token type must be an asset value type: " + assetContent->label);
          assetToPay = std::get<eosio::asset>(assetContent->value);
       }
       return adjustAsset(assetToPay, proration);
@@ -359,6 +384,7 @@ namespace hypha
 
    std::vector<Document> dao::getCurrentBadges(Period &period, const name &member)
    {
+      TRACE_FUNCTION()
       std::vector<Document> current_badges;
       std::vector<Edge> badge_assignment_edges = m_documentGraph.getEdgesFrom(Member::calcHash(member), common::ASSIGN_BADGE);
       for (Edge e : badge_assignment_edges)
@@ -381,7 +407,7 @@ namespace hypha
          //    counter++;
          // }
          // std::optional<eosio::time_point> periodEndTime = seeker.value().getEndTime();
-         // eosio::check(periodEndTime != std::nullopt, "End of calendar has been reached. Contact administrator to add more time periods.");
+         // EOS_CHECK(periodEndTime != std::nullopt, "End of calendar has been reached. Contact administrator to add more time periods.");
          // int64_t badgeAssignmentExpiration = periodEndTime.value().sec_since_epoch();
          // if (badgeAssignmentExpiration > eosio::current_time_point().sec_since_epoch())
          // {
@@ -393,6 +419,7 @@ namespace hypha
 
    eosio::asset dao::applyCoefficient(ContentWrapper &badge, const eosio::asset &base, const std::string &key)
    {
+      TRACE_FUNCTION()
       if (auto [idx, coefficient] = badge.get(DETAILS, key); coefficient)
       {
          if (std::holds_alternative<std::monostate>(coefficient->value))
@@ -400,7 +427,7 @@ namespace hypha
             return asset{0, base.symbol};
          }
 
-         eosio::check(std::holds_alternative<int64_t>(coefficient->value), "fatal error: coefficient must be an int64_t type: key: " + key);
+         EOS_CHECK(std::holds_alternative<int64_t>(coefficient->value), "fatal error: coefficient must be an int64_t type: key: " + key);
 
          float coeff_float = (float)((float)std::get<int64_t>(coefficient->value) / (float)10000);
          float adjustment = (float)coeff_float - (float)1;
@@ -411,6 +438,7 @@ namespace hypha
 
    dao::AssetBatch dao::applyBadgeCoefficients(Period &period, const eosio::name &member, dao::AssetBatch &ab)
    {
+      TRACE_FUNCTION()
       // get list of badges
       auto badges = getCurrentBadges(period, member);
       AssetBatch applied_assets = ab;
@@ -433,6 +461,7 @@ namespace hypha
                          const string &memo,
                          const eosio::name &paymentType)
    {
+      TRACE_FUNCTION()
       // nothing to do if quantity is zero of symbol is USD, a known placeholder
       if (quantity.amount == 0 || quantity.symbol == common::S_USD)
       {
@@ -447,6 +476,7 @@ namespace hypha
 
    void dao::apply(const eosio::name &applicant, const std::string &content)
    {
+      TRACE_FUNCTION()
       require_auth(applicant);
       Member member(*this, applicant, applicant);
       member.apply(getRoot(get_self()), content);
@@ -454,6 +484,7 @@ namespace hypha
 
    void dao::enroll(const eosio::name &enroller, const eosio::name &applicant, const std::string &content)
    {
+      TRACE_FUNCTION()
       require_auth(enroller);
       Member member = Member::get(*this, applicant);
       member.enroll(enroller, content);
@@ -461,23 +492,60 @@ namespace hypha
 
    bool dao::isPaused() { return false; }
 
-   Document dao::getSettingsDocument()
+   Document dao::getSettingsDocument(const eosio::name &dao_name)
    {
-      auto root = getRoot(get_self());
-      auto edges = m_documentGraph.getEdgesFromOrFail(root, common::SETTINGS_EDGE);
-      eosio::check(edges.size() == 1, "There should only exists only 1 settings edge from root node");
+      TRACE_FUNCTION()
+      auto dao = getDAO(dao_name);
+      auto edges = m_documentGraph.getEdgesFromOrFail(dao, common::SETTINGS_EDGE);
+      EOS_CHECK(edges.size() == 1, "There should only exists only 1 settings edge from a dao node");
       return Document(get_self(), edges[0].to_node);
    }
 
-   void dao::setsetting(const string &key, const Content::FlexValue &value)
+   Document dao::getSettingsDocument()
    {
-      require_auth(get_self());
-      setSetting(key, value);
+      TRACE_FUNCTION()
+      auto root = getDAO(eosio::name("bm"));
+      // auto root = getRoot(get_self());
+      auto edges = m_documentGraph.getEdgesFromOrFail(root, common::SETTINGS_EDGE);
+      EOS_CHECK(edges.size() == 1, "There should only exists only 1 settings edge from root node");
+      return Document(get_self(), edges[0].to_node);
    }
 
-   void dao::setSetting(const string &key, const Content::FlexValue &value)
+   // void dao::setsetting(const string &key, const Content::FlexValue &value)
+   // {
+   //    TRACE_FUNCTION()
+   //    require_auth(get_self());
+   //    setSetting(key, value);
+   // }
+
+   // void dao::setSetting(const string &key, const Content::FlexValue &value)
+   // {
+   //    TRACE_FUNCTION()
+   //    auto document = getSettingsDocument();
+   //    auto oldHash = document.getHash();
+   //    auto settingContent = Content(key, value);
+   //    auto updateDateContent = Content(UPDATED_DATE, eosio::current_time_point());
+
+   //    ContentWrapper cw = document.getContentWrapper();
+   //    ContentGroup *settings = cw.getGroupOrFail("settings");
+
+   //    ContentWrapper::insertOrReplace(*settings, settingContent);
+   //    ContentWrapper::insertOrReplace(*settings, updateDateContent);
+
+   //    m_documentGraph.updateDocument(get_self(), oldHash, document.getContentGroups());
+   // }
+
+   void dao::setsetting(const eosio::name &dao_name, const string &key, const Content::FlexValue &value)
    {
-      auto document = getSettingsDocument();
+      TRACE_FUNCTION()
+      require_auth(get_self());
+      setSetting(dao_name, key, value);
+   }
+
+   void dao::setSetting(const eosio::name &dao_name, const string &key, const Content::FlexValue &value)
+   {
+      TRACE_FUNCTION()
+      auto document = getSettingsDocument(dao_name);
       auto oldHash = document.getHash();
       auto settingContent = Content(key, value);
       auto updateDateContent = Content(UPDATED_DATE, eosio::current_time_point());
@@ -493,12 +561,14 @@ namespace hypha
 
    void dao::remsetting(const string &key)
    {
+      TRACE_FUNCTION()
       require_auth(get_self());
       removeSetting(key);
    }
 
    void dao::removeSetting(const string &key)
    {
+      TRACE_FUNCTION()
       auto document = getSettingsDocument();
       auto oldHash = document.getHash();
       auto contentGroups = document.getContentGroups();
@@ -518,11 +588,12 @@ namespace hypha
          m_documentGraph.updateDocument(get_self(), oldHash, std::move(contentGroups));
       }
       //Should we assert if setting doesn't exits ?
-      eosio::check(false, "The specified setting does not exist: " + key);
+      EOS_CHECK(false, "The specified setting does not exist: " + key);
    }
 
    void dao::addperiod(const eosio::checksum256 &predecessor, const eosio::time_point &start_time, const string &label)
    {
+      TRACE_FUNCTION()
       require_auth(get_self());
 
       Period newPeriod(this, start_time, label);
@@ -535,7 +606,7 @@ namespace hypha
       auto [idx, predecessorType] = contentWrapper.get(SYSTEM, TYPE);
       if (predecessorType && predecessorType->getAs<eosio::name>() == common::PERIOD)
       {
-         eosio::check(contentWrapper.getOrFail(DETAILS, START_TIME)->getAs<eosio::time_point>().sec_since_epoch() <
+         EOS_CHECK(contentWrapper.getOrFail(DETAILS, START_TIME)->getAs<eosio::time_point>().sec_since_epoch() <
                           start_time.sec_since_epoch(),
                       "start_time of period predecessor must be before the new period's start_time");
 
@@ -575,6 +646,7 @@ namespace hypha
 
    void dao::updatedoc(const eosio::checksum256 hash, const name &updater, const string &group, const string &key, const Content::FlexValue &value)
    {
+      TRACE_FUNCTION()
       eosio::require_auth(get_self());
 
       Document document(get_self(), hash);
@@ -590,11 +662,11 @@ namespace hypha
       m_documentGraph.updateDocument(updater, oldHash, document.getContentGroups());
    }
 
-   void dao::createdao(const eosio::name &dao_name, const std::string &dao_title)
+   void dao::createdao(const eosio::name &dao_name)
    {
       require_auth(get_self());
 
-      Document dao(get_self(), get_self(), getDAOContent(dao_name, dao_title));
+      Document dao(get_self(), get_self(), getDAOContent(dao_name));
 
       // Create the settings document as well and add an edge to it
       ContentGroups settingCgs{
@@ -612,6 +684,7 @@ namespace hypha
 
    void dao::createroot(const std::string &notes)
    {
+      TRACE_FUNCTION()
       require_auth(get_self());
 
       Document rootDoc(get_self(), get_self(), getRootContent(get_self()));
@@ -632,6 +705,7 @@ namespace hypha
 
    void dao::erasedoc(const checksum256 &hash)
    {
+      TRACE_FUNCTION()
       require_auth(get_self());
 
       DocumentGraph dg(get_self());
@@ -640,12 +714,14 @@ namespace hypha
 
    void dao::newedge(name &creator, const checksum256 &from_node, const checksum256 &to_node, const name &edge_name)
    {
+      TRACE_FUNCTION()
       require_auth(get_self());
       Edge edge(get_self(), creator, from_node, to_node, edge_name);
    }
 
    void dao::killedge(const uint64_t id)
    {
+      TRACE_FUNCTION()
       require_auth(get_self());
       Edge::edge_table e_t(get_self(), get_self().value);
       auto itr = e_t.find(id);
@@ -654,6 +730,7 @@ namespace hypha
 
    void dao::setalert(const eosio::name &level, const std::string &content)
    {
+      TRACE_FUNCTION()
       auto [exists, edge] = Edge::getIfExists(get_self(), getRoot(get_self()), common::ALERT);
       if (exists)
       {
@@ -676,6 +753,7 @@ namespace hypha
 
    void dao::remalert(const string &notes)
    {
+      TRACE_FUNCTION()
       Edge alertEdge = Edge::get(get_self(), getRoot(get_self()), common::ALERT);
       Document alert(get_self(), alertEdge.getToNode());
       getGraph().eraseDocument(alert.getHash());
@@ -708,6 +786,7 @@ namespace hypha
   */
    ACTION dao::adjustcmtmnt(name issuer, ContentGroups &adjust_info)
    {
+      TRACE_FUNCTION()
       require_auth(issuer);
 
       ContentWrapper cw(adjust_info);
@@ -718,7 +797,7 @@ namespace hypha
          Assignment assignment = Assignment(this,
                                             cw.getOrFail(i, "assignment").second->getAs<checksum256>());
 
-         eosio::check(assignment.getAssignee().getAccount() == issuer,
+         EOS_CHECK(assignment.getAssignee().getAccount() == issuer,
                       "Only the owner of the assignment can adjust it");
 
          int64_t newTimeShare = cw.getOrFail(i, NEW_TIME_SHARE).second->getAs<int64_t>();
@@ -740,6 +819,7 @@ namespace hypha
 
    void dao::modifyCommitment(Assignment& assignment, int64_t commitment, std::optional<eosio::time_point> fixedStartDate, std::string_view modifier)
    {
+      TRACE_FUNCTION()
       /**
       * Checks if the assignment has the original_approved_date item
       */
@@ -799,13 +879,13 @@ namespace hypha
       
       if (checkNewTimeShareMin) 
       {
-        eosio::check(
+        EOS_CHECK(
           commitment >= minTimeShare,
           to_str(NEW_TIME_SHARE, " must be greater than or equal to: ", minTimeShare, " You submitted: ", commitment)
         );
       }
 
-      eosio::check(
+      EOS_CHECK(
         commitment <= originalTimeShare,
         to_str(NEW_TIME_SHARE, " must be less than or equal to original (approved) time_share_x100: ", originalTimeShare, " You submitted: ", commitment)
       );
@@ -824,7 +904,7 @@ namespace hypha
                                                 ->getAs<time_point>();
 
         startDate = *fixedStartDate;
-        eosio::check(lastStartDate.sec_since_epoch() < startDate.sec_since_epoch(),
+        EOS_CHECK(lastStartDate.sec_since_epoch() < startDate.sec_since_epoch(),
                       "New time share start date must be greater than the previous time share start date");
       }
 
@@ -832,7 +912,7 @@ namespace hypha
                                                .getOrFail(DETAILS, TIME_SHARE)
                                                ->getAs<int64_t>();
 
-      eosio::check(
+      EOS_CHECK(
         lastTimeSharex100 != commitment,
         to_str("New commitment: [", commitment, "] must be different than current commitment: [", lastTimeSharex100, "]")
       );

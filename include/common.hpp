@@ -77,7 +77,6 @@ namespace common
     static constexpr name DAO = name ("dao");
 
     static constexpr name BALLOT_TYPE_OPTIONS = name("options");
-    static constexpr name BALLOT_TYPE_TELOS_DECIDE = name("telosdecide");
 
     static constexpr name GROUP_TYPE_OPTION = name("option");
 
@@ -136,19 +135,20 @@ namespace common
 #define BALLOT_TYPE "ballot_type"
 
 // setting document
-#define TELOS_DECIDE_CONTRACT "telos_decide_contract"
 #define SEEDS_TOKEN_CONTRACT "seeds_token_contract"
 #define SEEDS_ESCROW_CONTRACT "seeds_escrow_contract"
 #define HUSD_TOKEN_CONTRACT "husd_token_contract"
 #define TREASURY_CONTRACT "treasury_contract"
-#define HYPHA_TOKEN_CONTRACT "hypha_token_contract"
-#define HVOICE_TOKEN_CONTRACT "hvoice_token_contract"
+#define REWARD_TOKEN_CONTRACT "reward_token_contract"
+#define GOVERNANCE_TOKEN_CONTRACT "governance_token_contract"
 
 #define UPDATED_DATE "updated_date"
 #define SEEDS_DEFERRAL_FACTOR_X100 "seeds_deferral_factor_x100"
 #define HYPHA_DEFERRAL_FACTOR_X100 "hypha_deferral_factor_x100"
 #define LAST_SENDER_ID "last_sender_id"
 #define VOTING_DURATION_SEC "voting_duration_sec"
+#define VOTING_QUORUM_FACTOR_X100 "voting_quorum_x100"
+#define VOTING_ALIGNMENT_FACTOR_X100 "voting_alignment_x100"
 #define PUBLISHER_CONTRACT "publisher_contract"
 #define PAUSED "paused"
 #define ROLE_STRING "role"
